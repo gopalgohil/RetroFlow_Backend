@@ -1,0 +1,30 @@
+import dotenv from 'dotenv';
+import { z } from 'zod';
+
+dotenv.config();
+
+const envSchema = z.object({
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  PORT: z.coerce.number().default(5000),
+  CLIENT_URL: z.string().default('http://localhost:3000'),
+  MONGODB_URI: z.string().min(1, 'MONGODB_URI must be defined in environment variables'),
+  JWT_SECRET: z.string().min(16, 'JWT_SECRET must be defined in environment variables (minimum 16 characters)'),
+  JWT_EXPIRES_IN: z.string().default('7d'),
+  BREVO_API_KEY: z.string().optional(),
+  BREVO_SENDER_EMAIL: z.string().email().optional().default('gopalgohel249@gmail.com'),
+  BREVO_SENDER_NAME: z.string().optional().default('Digiflux'),
+});
+
+const parsedEnv = envSchema.safeParse(process.env);
+
+if (!parsedEnv.success) {
+  console.error('\n [Config Error] Invalid Environment Variables Configuration:');
+  parsedEnv.error.issues.forEach((issue) => {
+    console.error(`  - ${issue.path.join('.')}: ${issue.message}`);
+  });
+  console.error('\nPlease verify your server/.env file.\n');
+}
+
+export const env = parsedEnv.success ? parsedEnv.data : process.env;
+
+export default env;

@@ -1,0 +1,127 @@
+import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
+
+const userSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: [true, 'Please provide your full name'],
+      trim: true,
+      minlength: 2,
+      maxlength: 60,
+    },
+    email: {
+      type: String,
+      required: [true, 'Please provide your email address'],
+      unique: true,
+      lowercase: true,
+      trim: true,
+      match: [/^\S+@\S+\.\S+$/, 'Please provide a valid email address'],
+    },
+    password: {
+      type: String,
+      required: function () {
+        return this.authProvider === 'local';
+      },
+      minlength: 8,
+    },
+    authProvider: {
+      type: String,
+      enum: ['local', 'google'],
+      default: 'local',
+    },
+    googleId: {
+      type: String,
+      default: null,
+    },
+    avatar: {
+      type: String,
+      default: null,
+    },
+    role: {
+      type: String,
+      enum: ['admin', 'member'],
+      default: 'member',
+    },
+    projectRole: {
+      type: String,
+      default: 'Developer',
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending',
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    isApproved: {
+      type: Boolean,
+      default: false,
+    },
+    hasLoggedIn: {
+      type: Boolean,
+      default: false,
+    },
+    lastLogin: {
+      type: Date,
+      default: null,
+    },
+    verificationOtp: {
+      type: String,
+      default: null,
+    },
+    verificationOtpExpires: {
+      type: Date,
+      default: null,
+    },
+    resetPasswordOtp: {
+      type: String,
+      default: null,
+    },
+    resetPasswordExpires: {
+      type: Date,
+      default: null,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+userSchema.pre('save', async function (next) {
+  if (this.isModified('status')) {
+    if (this.status === 'approved') {
+      this.isApproved = true;
+    } else if (this.status === 'rejected' || this.status === 'pending') {
+      this.isApproved = false;
+    }
+  } else if (this.isModified('isApproved')) {
+    if (this.isApproved && this.status !== 'approved') {
+      this.status = 'approved';
+    }
+  }
+
+  if (!this.isModified('password') || !this.password) {
+    return next();
+  }
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+  next();
+});
+
+userSchema.methods.matchPassword = async function (enteredPassword) {
+  if (!this.password) {
+    return false;
+  }
+  return await bcrypt.compare(enteredPassword, this.password);
+};
+
+userSchema.index({ role: 1 });
+userSchema.index({ status: 1 });
+userSchema.index({ createdAt: -1 });
+
+const User = mongoose.model('User', userSchema);
+
+export default User;

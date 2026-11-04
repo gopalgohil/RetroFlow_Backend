@@ -1,0 +1,305 @@
+import mongoose from 'mongoose';
+import crypto from 'crypto';
+
+const topicSchema = new mongoose.Schema(
+  {
+    topicId: {
+      type: String,
+      default: () => crypto.randomUUID(),
+    },
+    title: {
+      type: String,
+      required: [true, 'Topic title is required'],
+      trim: true,
+      maxlength: 100,
+    },
+    description: {
+      type: String,
+      trim: true,
+      default: '',
+      maxlength: 250,
+    },
+    icon: {
+      type: String,
+      default: 'smile', 
+    },
+    color: {
+      type: String,
+      default: '#10B981', 
+    },
+    order: {
+      type: Number,
+      default: 0,
+    },
+  },
+  { _id: false }
+);
+
+const cardSchema = new mongoose.Schema(
+  {
+    cardId: {
+      type: String,
+      default: () => crypto.randomUUID(),
+    },
+    topicId: {
+      type: String,
+      required: [true, 'Topic ID is required'],
+    },
+    text: {
+      type: String,
+      required: [true, 'Card feedback text is required'],
+      trim: true,
+      maxlength: 1000,
+    },
+    author: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    authorEmail: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    votes: {
+      type: Number,
+      default: 0,
+    },
+    voters: {
+      type: [String],
+      default: [],
+    },
+    status: {
+      type: String,
+      enum: ['todo', 'in_progress', 'done'],
+      default: 'todo',
+    },
+    dueDate: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    priority: {
+      type: String,
+      enum: ['low', 'medium', 'high', 'critical'],
+      default: 'medium',
+    },
+    order: {
+      type: Number,
+      default: 0,
+    },
+    isSprintRemoved: {
+      type: Boolean,
+      default: false,
+    },
+    assignedTo: {
+      name: { type: String, default: null },
+      email: { type: String, default: null },
+      avatar: { type: String, default: null },
+    },
+    assignedSprintName: {
+      type: String,
+      default: null,
+    },
+    isExportedToActionItems: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  {
+    timestamps: true,
+    _id: false,
+  }
+);
+
+const attendeeSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: String,
+      default: null,
+    },
+    name: {
+      type: String,
+      required: [true, 'Attendee name is required'],
+      trim: true,
+    },
+    email: {
+      type: String,
+      required: [true, 'Attendee email is required'],
+      trim: true,
+      lowercase: true,
+    },
+    role: {
+      type: String,
+      trim: true,
+      default: 'Developer',
+    },
+    avatar: {
+      type: String,
+      default: '',
+    },
+    joinedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    lastActiveAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
+
+const retroBoardSchema = new mongoose.Schema(
+  {
+    title: {
+      type: String,
+      required: [true, 'Retrospective session title is required'],
+      trim: true,
+      minlength: 2,
+      maxlength: 120,
+    },
+    description: {
+      type: String,
+      trim: true,
+      default: '',
+      maxlength: 500,
+    },
+    scheduledDate: {
+      type: Date,
+      default: Date.now,
+    },
+    startDate: {
+      type: Date,
+      default: null,
+    },
+    endDate: {
+      type: Date,
+      default: null,
+    },
+    status: {
+      type: String,
+      enum: ['draft', 'active', 'completed'],
+      default: 'active',
+      index: true,
+    },
+    shareToken: {
+      type: String,
+      unique: true,
+      index: true,
+      default: () => crypto.randomUUID().slice(0, 12),
+    },
+    approvalRequired: {
+      type: Boolean,
+      default: false, 
+    },
+    revealMode: {
+      type: Boolean,
+      default: false, 
+    },
+    votingLimit: {
+      type: Number,
+      default: 1, 
+      min: 1,
+      max: 20,
+    },
+    backgroundTheme: {
+      type: String,
+      enum: ['sailboat', 'standard', 'space', 'mountain', 'minimal'],
+      default: 'standard',
+    },
+    topics: {
+      type: [topicSchema],
+      default: () => [
+        {
+          topicId: crypto.randomUUID(),
+          title: 'What went well?',
+          description: 'Things we are proud of or happy about',
+          icon: 'smile',
+          color: '#10B981',
+          order: 0,
+        },
+        {
+          topicId: crypto.randomUUID(),
+          title: 'What could be improved?',
+          description: 'Bottlenecks, frictions, or blockers to resolve',
+          icon: 'frown',
+          color: '#F43F5E',
+          order: 1,
+        },
+        {
+          topicId: crypto.randomUUID(),
+          title: 'Action Items',
+          description: 'Concrete deliverables for the upcoming sprint',
+          icon: 'target',
+          color: '#0EA5E9',
+          order: 2,
+        },
+      ],
+    },
+    cards: {
+      type: [cardSchema],
+      default: [],
+    },
+    attendees: {
+      type: [attendeeSchema],
+      default: [],
+    },
+    approvedMembers: {
+      type: [String],
+      default: [], 
+    },
+    projectId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Project',
+      index: true,
+      default: null,
+    },
+    projectKey: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    sprintId: {
+      type: String,
+      default: null,
+    },
+    sprintName: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    isProjectScoped: {
+      type: Boolean,
+      default: true,
+    },
+    isMonthlyAuto: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: false,
+      default: null,
+      index: true,
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+retroBoardSchema.index({ createdBy: 1, createdAt: -1 });
+retroBoardSchema.index({ approvedMembers: 1 });
+retroBoardSchema.index({ projectKey: 1 });
+retroBoardSchema.index({ 'attendees.email': 1 });
+retroBoardSchema.index({ _id: 1, 'cards.cardId': 1 });
+retroBoardSchema.index({ 'cards.cardId': 1 });
+retroBoardSchema.index({ projectId: 1, status: 1 });
+
+const RetroBoard = mongoose.model('RetroBoard', retroBoardSchema);
+
+export default RetroBoard;
+

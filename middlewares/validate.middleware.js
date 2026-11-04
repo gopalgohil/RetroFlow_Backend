@@ -1,0 +1,13 @@
+export const validate = (schema, target = 'body') => {
+  return (req, res, next) => {
+    try {
+      const parsed = schema.parse(req[target]);
+      req[target] = parsed;
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+};
+
+export default validate;

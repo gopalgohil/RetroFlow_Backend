@@ -1,0 +1,778 @@
+import env from '../config/env.js';
+
+class EmailService {
+  _htmlToPlainText(html) {
+    if (!html) return '';
+    return html
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&#847;/g, '')
+      .replace(/&zwnj;/g, '')
+      .replace(/&#8199;/g, '')
+      .replace(/&#65279;/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  async sendEmail({ to, subject, htmlContent, textContent }) {
+    const apiKey = env.BREVO_API_KEY || process.env.BREVO_API_KEY;
+    const senderEmail = env.BREVO_SENDER_EMAIL || process.env.BREVO_SENDER_EMAIL || 'gopalgohel249@gmail.com';
+    const senderName = env.BREVO_SENDER_NAME || process.env.BREVO_SENDER_NAME || 'Digiflux';
+
+    if (!apiKey || apiKey === 'your_brevo_api_key_here') {
+      console.warn('\n======================================================');
+      console.warn('⚠️ [Brevo Simulation] BREVO_API_KEY is not configured in server/.env');
+      console.warn(`📧 Intended recipient: ${to}`);
+      console.warn(`📝 Subject: ${subject}`);
+      console.warn('======================================================\n');
+      return { success: true, simulated: true };
+    }
+
+    const plainText = textContent || this._htmlToPlainText(htmlContent);
+
+    try {
+      const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          accept: 'application/json',
+          'api-key': apiKey,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: senderName, email: senderEmail },
+          to: [{ email: to }],
+          replyTo: { name: senderName, email: senderEmail },
+          subject,
+          htmlContent,
+          textContent: plainText,
+          tags: ['transactional'],
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error('[Brevo Error Response]', data);
+        throw new Error(data.message || 'Failed to dispatch email through Brevo');
+      }
+
+      console.log(`[Brevo] ✅ Email delivered to ${to} (MessageId: ${data.messageId})`);
+      return { success: true, messageId: data.messageId };
+    } catch (error) {
+      console.error(`[Brevo Error] Delivery failure to ${to}:`, error.message);
+      throw error;
+    }
+  }
+
+  _wrapEmail({ title, preheader, bodyHtml }) {
+    const previewText = preheader || 'Your verification code for Digiflux';
+    return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>${title || 'Digiflux'}</title>
+  <style type="text/css">
+    /* Reset styles */
+    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
+    table { border-collapse: collapse !important; }
+    body { margin: 0 !important; padding: 0 !important; width: 100% !important; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+
+    /* Mobile media queries */
+    @media only screen and (max-width: 600px) {
+      .outer-td {
+        padding: 12px 8px !important;
+      }
+      .email-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: 12px !important;
+      }
+      .email-card-content {
+        padding: 22px 16px !important;
+      }
+      .retro-card-padding {
+        padding: 16px 14px !important;
+      }
+      .email-btn {
+        display: block !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        text-align: center !important;
+        padding: 14px 16px !important;
+        font-size: 15px !important;
+      }
+      .main-heading {
+        font-size: 19px !important;
+        line-height: 25px !important;
+      }
+      .session-heading {
+        font-size: 16px !important;
+        line-height: 22px !important;
+      }
+      .otp-code {
+        font-size: 28px !important;
+        letter-spacing: 6px !important;
+      }
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <!-- Preheader preview text -->
+  <div style="display: none; font-size: 1px; color: #f8fafc; line-height: 1px; max-height: 0px; max-width: 0px; opacity: 0; overflow: hidden; mso-hide: all;">
+    ${previewText}
+  </div>
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc;">
+    <tr>
+      <td align="center" class="outer-td" style="padding: 28px 12px;">
+        <!--[if (gte mso 9)|(IE)]>
+        <table align="center" border="0" cellspacing="0" cellpadding="0" width="520">
+        <tr>
+        <td align="center" valign="top" width="520">
+        <![endif]-->
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="email-container" style="max-width: 520px; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); overflow: hidden;">
+          <tr>
+            <td class="email-card-content" style="padding: 30px 26px;">
+              <!-- Digiflux Brand Header (Clean Circular Avatar without Square Borders or Workspace Tag) -->
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 24px; border-collapse: collapse; border: 0;">
+                <tr>
+                  <td valign="middle" style="padding-right: 12px; border: 0; vertical-align: middle;">
+                    <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="border-collapse: collapse; border: 0;">
+                      <tr>
+                        <td align="center" valign="middle" style="width: 36px; height: 36px; background-color: #5cb028; background: linear-gradient(135deg, #88c958 0%, #5cb028 100%); color: #ffffff; font-weight: 900; font-size: 19px; border-radius: 50%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 36px; text-align: center; border: 0; outline: none; mso-line-height-rule: exactly;">
+                          D
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                  <td valign="middle" style="font-size: 22px; font-weight: 900; color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; letter-spacing: -0.5px; line-height: 36px; border: 0; vertical-align: middle;">
+                    digi<span style="color: #5cb028;">flux</span>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Main Dynamic Content -->
+              ${bodyHtml}
+
+              <!-- Common Footer -->
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-top: 24px; border-top: 1px solid #f1f5f9;">
+                <tr>
+                  <td align="center" style="padding-top: 18px;">
+                    <p style="font-size: 11px; color: #94a3b8; margin: 0 0 6px 0; line-height: 1.5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                      This is an automated transactional message regarding your Digiflux account.
+                    </p>
+                    <p style="font-size: 11px; color: #94a3b8; margin: 0; line-height: 1.5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                      &copy; ${new Date().getFullYear()} Digiflux. Continuous Improvement for Modern Agile Teams.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+        </table>
+        <!--[if (gte mso 9)|(IE)]>
+        </td>
+        </tr>
+        </table>
+        <![endif]-->
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+  }
+
+  getOtpTemplate(otpCode, recipientName = 'Agile Teammate') {
+    const bodyHtml = `
+      <h1 class="main-heading" style="font-size: 20px; line-height: 26px; font-weight: 800; color: #0f172a; margin: 0 0 10px 0;">
+        Password Reset Verification
+      </h1>
+      <p style="font-size: 14px; line-height: 22px; color: #334155; margin: 0 0 12px 0;">
+        Hello <strong>${recipientName}</strong>,
+      </p>
+      <p style="font-size: 14px; line-height: 22px; color: #334155; margin: 0 0 20px 0;">
+        We received a request to reset your Digiflux password. Enter the 6-digit verification code below:
+      </p>
+
+      <!-- OTP Code Box (Dotted/Dashed Green Border, Light Mode Theme) -->
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 22px 0; background-color: #f4fbf0; border: 2px dashed #5cb028; border-radius: 14px;">
+        <tr>
+          <td align="center" style="padding: 22px 14px;">
+            <span class="otp-code" style="font-size: 34px; font-family: 'Courier New', Courier, monospace; font-weight: 800; letter-spacing: 8px; color: #2d6614; display: inline-block;">
+              ${otpCode}
+            </span>
+          </td>
+        </tr>
+      </table>
+
+      <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin: 16px 0 0 0;">
+        ⏱ This code is valid for <strong>10 minutes</strong>. If you did not initiate this request, no action is needed — your account is safe.
+      </p>
+    `;
+    return this._wrapEmail({
+      title: 'Password Reset - Digiflux',
+      preheader: 'Your 6-digit verification code to reset your password.',
+      bodyHtml,
+    });
+  }
+
+  getSignupVerificationTemplate(otpCode, recipientName = 'Agile Teammate') {
+    const bodyHtml = `
+      <h1 class="main-heading" style="font-size: 20px; line-height: 26px; font-weight: 800; color: #0f172a; margin: 0 0 10px 0;">
+        Verify Your Email Address
+      </h1>
+      <p style="font-size: 14px; line-height: 22px; color: #334155; margin: 0 0 12px 0;">
+        Welcome to Digiflux, <strong>${recipientName}</strong>!
+      </p>
+      <p style="font-size: 14px; line-height: 22px; color: #334155; margin: 0 0 20px 0;">
+        To complete your account registration, please enter this 6-digit verification code:
+      </p>
+
+      <!-- OTP Code Box (Dotted/Dashed Green Border, Light Mode Theme) -->
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 22px 0; background-color: #f4fbf0; border: 2px dashed #5cb028; border-radius: 14px;">
+        <tr>
+          <td align="center" style="padding: 22px 14px;">
+            <span class="otp-code" style="font-size: 34px; font-family: 'Courier New', Courier, monospace; font-weight: 800; letter-spacing: 8px; color: #2d6614; display: inline-block;">
+              ${otpCode}
+            </span>
+          </td>
+        </tr>
+      </table>
+
+      <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin: 16px 0 0 0;">
+        ⏱ This code is valid for <strong>10 minutes</strong>. Once verified, you will be able to log in to your account.
+      </p>
+    `;
+    return this._wrapEmail({
+      title: 'Verify Your Email - Digiflux',
+      preheader: 'Your 6-digit verification code to activate your account.',
+      bodyHtml,
+    });
+  }
+
+  getRetroInvitationTemplate({
+    retroTitle,
+    inviteUrl,
+    senderName = 'Your Team Admin',
+    description = '',
+    customMessage = '',
+    topics = [],
+    isMagicInvite = true,
+    recipientEmail = '',
+  }) {
+    const topicPillsHtml =
+      topics && topics.length > 0
+        ? topics
+          .map(
+            (t) => `
+          <span style="display: inline-block; background-color: ${t.color || '#5cb028'}18; color: ${t.color || '#3d8318'
+              }; border: 1px solid ${t.color || '#5cb028'}35; font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 6px; margin: 3px 4px 3px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; white-space: nowrap;">
+            ${t.title}
+          </span>
+        `
+          )
+          .join('')
+        : '';
+
+    const bodyHtml = `
+      <div style="margin-bottom: 14px;">
+        <span style="display: inline-block; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; background-color: #eaf5e3; color: #2d6614; border: 1px solid #cdeac0; padding: 3px 8px; border-radius: 6px;">
+          ✨ 1-Click Magic Entry &bull; Zero Passwords
+        </span>
+      </div>
+      <h1 class="main-heading" style="font-size: 21px; line-height: 27px; font-weight: 800; color: #0f172a; margin: 0 0 8px 0; letter-spacing: -0.4px;">
+        You're invited to a Sprint Retrospective
+      </h1>
+      <p style="font-size: 14px; line-height: 22px; color: #475569; margin: 0 0 18px 0;">
+        <strong>${senderName}</strong> has invited you to collaborate in real-time. No sign-up or password required — just click the button below to join:
+      </p>
+
+      <!-- Retrospective Card Box -->
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fbfdf9; border: 1px solid #dcf0d0; border-left: 4px solid #5cb028; border-radius: 12px; margin-bottom: 20px;">
+        <tr>
+          <td class="retro-card-padding" style="padding: 16px 18px;">
+            <div style="font-size: 11px; font-weight: 800; text-transform: uppercase; color: #3d8318; letter-spacing: 0.5px; margin-bottom: 4px;">
+              &#9679; Interactive Agile Session
+            </div>
+            <div class="session-heading" style="font-size: 17px; line-height: 23px; font-weight: 800; color: #0f172a; margin: 0 0 6px 0;">
+              ${retroTitle}
+            </div>
+            ${description
+        ? `<div style="font-size: 13px; line-height: 19px; color: #64748b; margin: 0 0 12px 0;">${description}</div>`
+        : ''
+      }
+            ${topicPillsHtml
+        ? `
+              <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
+                <div style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; letter-spacing: 0.5px;">Agenda Topics:</div>
+                <div style="line-height: 26px;">
+                  ${topicPillsHtml}
+                </div>
+              </div>
+            `
+        : ''
+      }
+          </td>
+        </tr>
+      </table>
+
+      ${customMessage
+        ? `
+        <!-- Custom Message Box -->
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 20px; background-color: #f8fafc; border-left: 3px solid #5cb028; border-radius: 0 8px 8px 0;">
+          <tr>
+            <td style="padding: 12px 16px;">
+              <p style="font-size: 13px; color: #334155; font-style: italic; margin: 0; line-height: 1.5;">
+                "${customMessage}"
+              </p>
+              <div style="font-size: 11px; color: #94a3b8; margin-top: 4px; font-weight: 600;">— Note from ${senderName}</div>
+            </td>
+          </tr>
+        </table>
+      `
+        : ''
+      }
+
+      <!-- Direct Mobile-Friendly CTA Button (Digiflux Green) -->
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 22px 0 16px 0;">
+        <tr>
+          <td align="center">
+            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 340px;">
+              <tr>
+                <td align="center" style="background-color: #5cb028; border-radius: 10px; box-shadow: 0 4px 14px rgba(92, 176, 40, 0.3);">
+                  <a href="${inviteUrl}" target="_blank" class="email-btn" style="display: block; width: 100%; box-sizing: border-box; background-color: #5cb028; color: #ffffff; font-size: 14px; font-weight: 800; text-decoration: none; padding: 13px 20px; border-radius: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; line-height: 1.2;">
+                    Join Live Retrospective Board &rarr;
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <!-- Fallback Direct Link -->
+      <p style="font-size: 12px; color: #64748b; text-align: center; margin: 0 0 16px 0; line-height: 1.5;">
+        Or paste this link into your browser:<br />
+        <a href="${inviteUrl}" style="color: #3d8318; text-decoration: underline; word-break: break-all; font-weight: 600;">${inviteUrl}</a>
+      </p>
+    `;
+
+    return this._wrapEmail({
+      title: `Invitation: ${retroTitle} - Digiflux`,
+      preheader: `${senderName} invited you to join "${retroTitle}" retrospective session.`,
+      bodyHtml,
+    });
+  }
+
+  getProjectInvitationTemplate({
+    projectName,
+    projectKey,
+    projectLead,
+    role = 'Developer',
+    inviteUrl,
+    senderName,
+    customMessage,
+    recipientEmail,
+  }) {
+    const bodyHtml = `
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="display: inline-block; width: 52px; height: 52px; line-height: 52px; border-radius: 16px; background-color: #eaf5e3; color: #2d6614; border: 1px solid #cdeac0; font-size: 20px; font-weight: 800; font-family: -apple-system, BlinkMacSystemFont, sans-serif;">
+          ${projectKey || 'PRJ'}
+        </div>
+        <h2 style="font-size: 20px; font-weight: 800; color: #0f172a; margin: 14px 0 6px 0; letter-spacing: -0.5px;">
+          You've been invited to ${projectName}
+        </h2>
+        <p style="font-size: 13px; color: #64748b; margin: 0; line-height: 1.5;">
+          ${senderName || 'Your Project Lead'} invited you to join this agile initiative as a <strong>${role}</strong>.
+        </p>
+      </div>
+
+      <!-- Project Metadata Card -->
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 20px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
+        <tr>
+          <td style="padding: 20px 22px;">
+            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; margin-bottom: 4px;">Project Details</div>
+            <div style="font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 4px;">${projectName} (${projectKey})</div>
+            <div style="font-size: 12px; color: #64748b;">
+              Project Lead: <strong style="color: #334155;">${projectLead || 'Designated Lead'}</strong> &bull; Assigned Role: <strong style="color: #3d8318;">${role}</strong>
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      ${customMessage
+        ? `
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 20px; background-color: #f8fafc; border-left: 3px solid #5cb028; border-radius: 0 8px 8px 0;">
+          <tr>
+            <td style="padding: 12px 16px;">
+              <p style="font-size: 13px; color: #334155; font-style: italic; margin: 0; line-height: 1.5;">
+                "${customMessage}"
+              </p>
+              <div style="font-size: 11px; color: #94a3b8; margin-top: 4px; font-weight: 600;">— Note from ${senderName}</div>
+            </td>
+          </tr>
+        </table>
+      `
+        : ''
+      }
+
+      <!-- Direct Mobile-Friendly CTA Button (Digiflux Green) -->
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 24px 0 16px 0;">
+        <tr>
+          <td align="center">
+            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 340px;">
+              <tr>
+                <td align="center" style="background-color: #5cb028; border-radius: 10px; box-shadow: 0 4px 14px rgba(92, 176, 40, 0.3);">
+                  <a href="${inviteUrl}" target="_blank" class="email-btn" style="display: block; width: 100%; box-sizing: border-box; background-color: #5cb028; color: #ffffff; font-size: 14px; font-weight: 800; text-decoration: none; padding: 13px 20px; border-radius: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; line-height: 1.2;">
+                    Open Project Dashboard &rarr;
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <!-- Fallback Direct Link -->
+      <p style="font-size: 12px; color: #64748b; text-align: center; margin: 0 0 16px 0; line-height: 1.5;">
+        Or copy and paste this link in your browser:<br />
+        <a href="${inviteUrl}" style="color: #3d8318; text-decoration: underline; word-break: break-all; font-weight: 600;">${inviteUrl}</a>
+      </p>
+    `;
+
+    return this._wrapEmail({
+      title: `Invitation: ${projectName} - Digiflux`,
+      preheader: `${senderName || 'Your Project Lead'} invited you to join "${projectName}" on Digiflux.`,
+      bodyHtml,
+    });
+  }
+
+  getAdminNewUserPendingTemplate({ userName, userEmail, registeredAt, reviewUrl }) {
+    const formattedDate = registeredAt || new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+    const cleanReviewUrl = (reviewUrl || `${(env.CLIENT_URL || 'http://localhost:3000').replace(/\/+$/, '')}/admin/users`).replace(/([^:])\/\/+/g, '$1/');
+    const bodyHtml = `
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="display: inline-block; padding: 6px 14px; border-radius: 20px; background-color: #fef3c7; color: #92400e; border: 1px solid #fde68a; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">
+          Pending Approval
+        </div>
+        <h2 style="font-size: 20px; font-weight: 800; color: #0f172a; margin: 14px 0 6px 0; letter-spacing: -0.5px;">
+          New User Awaiting Approval
+        </h2>
+        <p style="font-size: 13px; color: #64748b; margin: 0; line-height: 1.5;">
+          A new user has registered and verified their email address. They are waiting for your approval to access the workspace.
+        </p>
+      </div>
+
+      <!-- User Details Card -->
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 20px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
+        <tr>
+          <td style="padding: 20px 22px;">
+            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; margin-bottom: 6px;">Applicant Information</div>
+            <div style="font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 4px;">${userName}</div>
+            <div style="font-size: 13px; color: #475569; margin-bottom: 8px;">
+              Email: <strong style="color: #0f172a;">${userEmail}</strong>
+            </div>
+            <div style="font-size: 12px; color: #64748b;">
+              Registered At: <strong>${formattedDate}</strong>
+            </div>
+          </td>
+        </tr>
+      </table>
+
+      <!-- Action Button -->
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 24px 0 16px 0;">
+        <tr>
+          <td align="center">
+            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 340px;">
+              <tr>
+                <td align="center" style="background-color: #5cb028; border-radius: 10px; box-shadow: 0 4px 14px rgba(92, 176, 40, 0.3);">
+                  <a href="${cleanReviewUrl}" target="_blank" class="email-btn" style="display: block; width: 100%; box-sizing: border-box; background-color: #5cb028; color: #ffffff; font-size: 14px; font-weight: 800; text-decoration: none; padding: 13px 20px; border-radius: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; line-height: 1.2;">
+                    Review &amp; Approve User &rarr;
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <p style="font-size: 12px; color: #64748b; text-align: center; margin: 0 0 16px 0; line-height: 1.5;">
+        Or open the Admin Dashboard:<br />
+        <a href="${cleanReviewUrl}" style="color: #3d8318; text-decoration: underline; word-break: break-all; font-weight: 600;">${cleanReviewUrl}</a>
+      </p>
+    `;
+
+    return this._wrapEmail({
+      title: 'New User Awaiting Approval - Digiflux',
+      preheader: `${userName} (${userEmail}) registered and is awaiting your approval.`,
+      bodyHtml,
+    });
+  }
+
+  getUserAccountApprovedTemplate({ userName, userEmail, role = 'Developer', loginUrl }) {
+    const cleanLoginUrl = (loginUrl || `${(env.CLIENT_URL || 'http://localhost:3000').replace(/\/+$/, '')}/login`).replace(/([^:])\/\/+/g, '$1/');
+    const bodyHtml = `
+      <div style="text-align: center; margin-bottom: 28px;">
+        <div style="display: inline-block; padding: 6px 14px; border-radius: 20px; background-color: #eaf5e3; color: #2d6614; border: 1px solid #cdeac0; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">
+          Account Approved
+        </div>
+        <h2 style="font-size: 22px; font-weight: 800; color: #0f172a; margin: 16px 0 0 0; letter-spacing: -0.5px;">
+          Welcome to Digiflux, ${userName}!
+        </h2>
+      </div>
+
+      <!-- Account Role Card -->
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 28px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px;">
+        <tr>
+          <td style="padding: 22px 24px;">
+            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                <td style="padding-bottom: 14px; border-bottom: 1px solid #e2e8f0;">
+                  <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.6px; display: block; margin-bottom: 5px;">Registered Email</span>
+                  <span style="font-size: 14px; font-weight: 700; color: #0f172a; word-break: break-all;">${userEmail}</span>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding-top: 14px;">
+                  <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.6px; display: block; margin-bottom: 6px;">Assigned Role</span>
+                  <span style="display: inline-block; padding: 4px 12px; border-radius: 6px; background-color: #eaf5e3; color: #2d6614; font-size: 12px; font-weight: 700; border: 1px solid #cdeac0;">
+                    ${role}
+                  </span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <!-- CTA Button -->
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 28px 0 16px 0;">
+        <tr>
+          <td align="center">
+            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 340px;">
+              <tr>
+                <td align="center" style="background-color: #5cb028; border-radius: 10px; box-shadow: 0 4px 14px rgba(92, 176, 40, 0.3);">
+                  <a href="${cleanLoginUrl}" target="_blank" class="email-btn" style="display: block; width: 100%; box-sizing: border-box; background-color: #5cb028; color: #ffffff; font-size: 14px; font-weight: 800; text-decoration: none; padding: 13px 20px; border-radius: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; line-height: 1.2;">
+                    Sign In to Your Workspace &rarr;
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <p style="font-size: 12px; color: #64748b; text-align: center; margin: 0 0 16px 0; line-height: 1.5;">
+        Or go directly to:<br />
+        <a href="${cleanLoginUrl}" style="color: #3d8318; text-decoration: underline; word-break: break-all; font-weight: 600;">${cleanLoginUrl}</a>
+      </p>
+    `;
+
+    return this._wrapEmail({
+      title: 'Your Account Has Been Approved - Digiflux',
+      preheader: `Good news ${userName}! Your account has been approved and you can now log in.`,
+      bodyHtml,
+    });
+  }
+
+  getUserAccountRejectedTemplate({ userName, userEmail, contactEmail }) {
+    const supportEmail = contactEmail || 'support@digiflux.io';
+    const bodyHtml = `
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="display: inline-block; padding: 6px 14px; border-radius: 20px; background-color: #fee2e2; color: #991b1b; border: 1px solid #fecaca; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">
+          Registration Update
+        </div>
+        <h2 style="font-size: 20px; font-weight: 800; color: #0f172a; margin: 14px 0 6px 0; letter-spacing: -0.5px;">
+          Update on Your Registration Request
+        </h2>
+        <p style="font-size: 13px; color: #64748b; margin: 0; line-height: 1.5;">
+          Hello ${userName}, thank you for your interest in Digiflux.
+        </p>
+      </div>
+
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 20px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px;">
+        <tr>
+          <td style="padding: 20px 22px;">
+            <p style="font-size: 13px; color: #334155; line-height: 1.6; margin: 0 0 10px 0;">
+              Your signup request for <strong>${userEmail}</strong> was reviewed by the workspace administrator, but could not be approved at this time.
+            </p>
+            <p style="font-size: 12px; color: #64748b; line-height: 1.5; margin: 0;">
+              If you believe this was an error or would like to request access again, please contact your workspace administrator at <a href="mailto:${supportEmail}" style="color: #3d8318; font-weight: 600;">${supportEmail}</a>.
+            </p>
+          </td>
+        </tr>
+      </table>
+    `;
+
+    return this._wrapEmail({
+      title: 'Digiflux Registration Update',
+      preheader: `Update regarding your Digiflux registration request for ${userEmail}.`,
+      bodyHtml,
+    });
+  }
+
+  getUserWelcomeTemplate({ userName, userEmail, dashboardUrl }) {
+    const cleanUrl = (dashboardUrl || `${(env.CLIENT_URL || 'http://localhost:3000').replace(/\/+$/, '')}/login`).replace(/([^:])\/\/+/g, '$1/');
+    const bodyHtml = `
+      <div style="text-align: center; margin-bottom: 28px;">
+        <div style="display: inline-block; padding: 6px 14px; border-radius: 20px; background-color: #fffbeb; color: #b45309; border: 1px solid #fde68a; font-size: 11px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;">
+          Account Pending Approval
+        </div>
+        <h2 style="font-size: 22px; font-weight: 800; color: #0f172a; margin: 16px 0 0 0; letter-spacing: -0.5px;">
+          Welcome to Digiflux, ${userName}!
+        </h2>
+      </div>
+
+      <!-- Account Status Card -->
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom: 28px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px;">
+        <tr>
+          <td style="padding: 22px 24px;">
+            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+              <tr>
+                <td style="padding-bottom: 14px; border-bottom: 1px solid #e2e8f0;">
+                  <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.6px; display: block; margin-bottom: 5px;">Registered Email</span>
+                  <span style="font-size: 14px; font-weight: 700; color: #0f172a; word-break: break-all;">${userEmail}</span>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding-top: 14px;">
+                  <span style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.6px; display: block; margin-bottom: 8px;">Account Status</span>
+                  <div>
+                    <span style="display: inline-block; padding: 4px 12px; border-radius: 6px; background-color: #fffbeb; color: #b45309; font-size: 12px; font-weight: 700; border: 1px solid #fde68a;">
+                      Pending Administrator Review
+                    </span>
+                  </div>
+                  <div style="font-size: 13px; color: #64748b; line-height: 1.5; margin-top: 10px;">
+                    Your account is awaiting approval by the workspace administrator. You will be notified via email once access is granted.
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <!-- CTA Button -->
+      <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 28px 0 16px 0;">
+        <tr>
+          <td align="center">
+            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 340px;">
+              <tr>
+                <td align="center" style="background-color: #5cb028; border-radius: 10px; box-shadow: 0 4px 14px rgba(92, 176, 40, 0.3);">
+                  <a href="${cleanUrl}" target="_blank" class="email-btn" style="display: block; width: 100%; box-sizing: border-box; background-color: #5cb028; color: #ffffff; font-size: 14px; font-weight: 800; text-decoration: none; padding: 13px 20px; border-radius: 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; line-height: 1.2;">
+                    Sign In to Your Workspace &rarr;
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+
+      <p style="font-size: 12px; color: #64748b; text-align: center; margin: 0 0 16px 0; line-height: 1.5;">
+        Or go directly to:<br />
+        <a href="${cleanUrl}" style="color: #3d8318; text-decoration: underline; word-break: break-all; font-weight: 600;">${cleanUrl}</a>
+      </p>
+    `;
+
+    return this._wrapEmail({
+      title: 'Welcome to Digiflux - Pending Approval',
+      preheader: `Welcome to Digiflux, ${userName}! Your account is pending administrator approval.`,
+      bodyHtml,
+    });
+  }
+
+  async notifyUserWelcome({ user, dashboardUrl }) {
+    try {
+      const url = dashboardUrl || `${env.CLIENT_URL || 'http://localhost:3000'}/login`;
+      const htmlContent = this.getUserWelcomeTemplate({
+        userName: user.name || user.email.split('@')[0],
+        userEmail: user.email,
+        dashboardUrl: url,
+      });
+      return await this.sendEmail({
+        to: user.email,
+        subject: `Welcome to Digiflux, ${user.name || user.email.split('@')[0]}! 🎉`,
+        htmlContent,
+      });
+    } catch (err) {
+      console.error('[Brevo] Failed to dispatch user welcome notification:', err.message);
+      return { success: false, error: err.message };
+    }
+  }
+
+  async notifyAdminNewUser({ user, reviewUrl }) {
+    try {
+      const adminEmail = (process.env.SUPER_ADMIN_EMAIL || 'gopalgohel249@gmail.com').toLowerCase().trim();
+      const url = reviewUrl || `${env.CLIENT_URL || 'http://localhost:3000'}/dashboard?tab=members`;
+      const htmlContent = this.getAdminNewUserPendingTemplate({
+        userName: user.name || 'New User',
+        userEmail: user.email,
+        registeredAt: new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }),
+        reviewUrl: url,
+      });
+      return await this.sendEmail({
+        to: adminEmail,
+        subject: `New User Registration Awaiting Approval - ${user.name || user.email}`,
+        htmlContent,
+      });
+    } catch (err) {
+      console.error('[Brevo] Failed to dispatch admin pending notification:', err.message);
+      return { success: false, error: err.message };
+    }
+  }
+
+  async notifyUserApproved({ user, role, loginUrl }) {
+    try {
+      const url = loginUrl || `${env.CLIENT_URL || 'http://localhost:3000'}/login`;
+      const htmlContent = this.getUserAccountApprovedTemplate({
+        userName: user.name || user.email.split('@')[0],
+        userEmail: user.email,
+        role: role || user.projectRole || 'Developer',
+        loginUrl: url,
+      });
+      return await this.sendEmail({
+        to: user.email,
+        subject: 'Your Digiflux Account Has Been Approved',
+        htmlContent,
+      });
+    } catch (err) {
+      console.error('[Brevo] Failed to dispatch user approved notification:', err.message);
+      return { success: false, error: err.message };
+    }
+  }
+
+  async notifyUserRejected({ user, contactEmail }) {
+    try {
+      const adminEmail = (process.env.SUPER_ADMIN_EMAIL || 'gopalgohel249@gmail.com').toLowerCase().trim();
+      const htmlContent = this.getUserAccountRejectedTemplate({
+        userName: user.name || user.email.split('@')[0],
+        userEmail: user.email,
+        contactEmail: contactEmail || adminEmail,
+      });
+      return await this.sendEmail({
+        to: user.email,
+        subject: 'Update on Your Digiflux Registration Request',
+        htmlContent,
+      });
+    } catch (err) {
+      console.error('[Brevo] Failed to dispatch user rejection notification:', err.message);
+      return { success: false, error: err.message };
+    }
+  }
+}
+
+export const emailService = new EmailService();
+export default emailService;
+
